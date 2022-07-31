@@ -1,0 +1,105 @@
+<?php namespace ProcessWire;
+
+class FindMerge extends WireData implements Module {
+
+	/**
+	 * Module information
+	 */
+	public static function getModuleInfo() {
+		return array(
+			'title' => 'Find Merge',
+			'summary' => 'Allows multiple PageFinder selectors to be merged into an efficient paginated set of results.',
+			'version' => '0.1.0',
+			'author' => 'Robin Sallis',
+			'href' => 'https://github.com/Toutouwai/FindMerge',
+			'icon' => 'binoculars',
+			'autoload' => true,
+			'requires' => 'ProcessWire>=3.0.172, PHP>=5.4.0',
+		);
+	}
+
+	/**
+	 * Ready
+	 */
+	public function ready() {
+		$this->addHookMethod('Pages::findMerge', $this, 'findMerge');
+	}
+
+	/**
+	 * Find pages by merging the results of an array of selectors
+	 *
+	 * @param HookEvent $event
+	 */
+	protected function findMerge(HookEvent $event) {
+		/** @var Pages $pages */
+		$pages = $event->object;
+		$selectors = $event->arguments(0);
+		$options = $event->arguments(1);
+		$input = $this->wire()->input;
+
+		// If second argument is an integer, treat it as $options['limit']
+		if(is_int($options)) $options = ['limit' => $options];
+
+		// Determine options
+		$default_options = [
+			'limit' => 0,
+			'start' => null,
+			'excludeExisting' => true,
+			'keepFirst' => true,
+		];
+		$options = array_merge($default_options, $options);
+		$limit = (int) $options['limit'];
+		$start = $options['start'];
+		$keep_first = (bool) $options['keepFirst'];
+		$exclude_existing = (bool) $options['excludeExisting'];
+
+		// Get all the IDs that match the selectors
+		$all_ids = [];
+		foreach($selectors as $selector) {
+			// Convert selector to Selectors object to check for presence of "start"
+			$slctrs = new Selectors($selector);
+			$s_start = $slctrs->get("field=start");
+			// If there is no start explicitly set then the start should be zero
+			// This is to avoid the current page number affecting the results of this selector
+			if(!$s_start) {
+				$s_start = new SelectorEqual('start', 0);
+				$slctrs->add($s_start);
+			}
+			// Exclude existing true: exclude results that are already in $all_ids
+			if($exclude_existing) {
+				$s_exclude = new SelectorNotEqual('id', $all_ids);
+				$slctrs->add($s_exclude);
+			}
+			if($keep_first) {
+				$ids = $pages->findIDs($slctrs, ['indexed' => true]);
+				// Keep first true: IDs are not added if they already exist in $all_ids
+				$all_ids = $all_ids + $ids;
+			} else {
+				$ids = $pages->findIDs($slctrs);
+				// Keep first false: $all_ids can contain duplicates
+				$all_ids = array_merge($all_ids, $ids);
+			}
+		}
+		// Keep first false: Make $all_ids values unique, preferring the last occurrence of duplicates
+		if(!$keep_first) $all_ids = array_reverse(array_unique(array_reverse($all_ids)));
+
+		// Get a slice of the IDs according to the current page number
+		if($limit) {
+			if(is_null($start)) $start = ($input->pageNum - 1) * $limit;
+			$slice = array_slice($all_ids, $start, $limit);
+		} else {
+			$slice = $all_ids;
+		}
+
+		// Get a PageArray from the slice of IDs
+		$results = $pages->getByIDs($slice);
+		// Set total, limit and start
+		$results->setTotal(count($all_ids));
+		$results->setLimit($limit);
+		$results->setStart($start);
+
+		// Return results
+		$event->return = $results;
+	}
+
+}
