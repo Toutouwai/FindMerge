@@ -96,7 +96,7 @@ class FindMerge extends WireData implements Module {
 		// Set total, limit and start
 		$results->setTotal(count($all_ids));
 		$results->setLimit($limit);
-		$results->setStart($start);
+		$results->setStart((int) $start);
 
 		// Return results
 		$event->return = $results;
