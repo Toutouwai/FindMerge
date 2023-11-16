@@ -9,7 +9,7 @@ class FindMerge extends WireData implements Module {
 		return array(
 			'title' => 'Find Merge',
 			'summary' => 'Allows multiple PageFinder selectors to be merged into an efficient paginated set of results.',
-			'version' => '0.1.0',
+			'version' => '0.1.1',
 			'author' => 'Robin Sallis',
 			'href' => 'https://github.com/Toutouwai/FindMerge',
 			'icon' => 'binoculars',
@@ -39,6 +39,9 @@ class FindMerge extends WireData implements Module {
 
 		// If second argument is an integer, treat it as $options['limit']
 		if(is_int($options)) $options = ['limit' => $options];
+
+		// Options must be an array
+		if(!is_array($options)) $options = [];
 
 		// Determine options
 		$default_options = [
